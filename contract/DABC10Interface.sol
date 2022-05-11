@@ -2,7 +2,7 @@
 pragma solidity >=0.7.0 <0.9.0;
 
 
-abstract contract MP10Interface {
+abstract contract DABC10Interface {
    
     uint256 public totalSupply;
 
@@ -18,4 +18,5 @@ abstract contract MP10Interface {
 
     event Transfer(address indexed _from, address indexed _to, uint256 _value);
     event Approval(address indexed _owner, address indexed _spender, uint256 _value);
+    event Burn(address indexed from, uint256 value);
 }
