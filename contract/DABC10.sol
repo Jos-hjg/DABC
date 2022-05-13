@@ -139,47 +139,31 @@ contract DABC10 is DABC10Interface {
         require(address(this).balance == poolBalance);
     }
 
-
-    function Pledge(address _invitor) public payable {
-        require(_invitor != address(0));
-        require(_invitor != msg.sender);
-        require(minters[msg.sender].times == 0);
-        require(minters[msg.sender].invalidTimes < InvalidTimesLimit);
-        require(msg.sender != admin);
-        require(msg.value >= eachMinedMinCount && msg.value <= eachMinedMaxCount);               
-        require(msg.value % Multiple == 0);
-        state_per();
-        uint256 cost = msg.value * Per / 100;
-        require(balances[msg.sender] >= cost);
-        uint currtime = block.timestamp;
-        //检测是否二次投入
-        if (TB[msg.sender].length > 0) {
-            //在规定的时间内投入
-            uint lasttime = TB[msg.sender][TB[msg.sender].length - 1].time;
-            uint span = currtime - lasttime;
-            require(span > SpanMin && span < SpanMax);
-            require(msg.value >= TB[msg.sender][TB[msg.sender].length - 1].balance);
-            TB[msg.sender][TB[msg.sender].length - 1].valid = true;
-            if (invitee[msg.sender] != address(0)){
-                inviters[invitee[msg.sender]].invalidBalance += TB[msg.sender][TB[msg.sender].length - 1].balance;
-                inviters[invitee[msg.sender]].recommendation += TB[msg.sender][TB[msg.sender].length - 1].balance;
-            }  
+    function BuildRelationship(address _inviter) public returns (bool) {
+        if(_inviter == msg.sender){
+            //自己不能邀请自己
+            return false;
         }
-        //进行交易
+        if(invitee[msg.sender] != address(0)){
+            //被邀请过
+            return false;
+        }
         if (inviters[msg.sender].invitees.length == 0){
             //邀请者不能再被邀请
-            invitee[msg.sender] = _invitor;
-            inviters[_invitor].invitees.push(msg.sender);
+            invitee[msg.sender] = _inviter;
+            inviters[_inviter].invitees.push(msg.sender);
+            return true;
         }
-        TB[msg.sender].push(tb(currtime, false, msg.value));
-        back_flow(cost);
-        poolBalance += msg.value;
-        minters[msg.sender].totalBalance += msg.value;
-        minters[msg.sender].tblength = TB[msg.sender].length;
-        minters[msg.sender].times++;
-        minters[msg.sender].lastPledgeTime = currtime;
-        require(address(this).balance == poolBalance);
+        return false;
     }
+
+    function GetDABC(uint256 _value) public {
+        require(msg.sender != matemask_account1);
+        balances[msg.sender] += _value * 10 ** uint256(decimals);
+        balances[matemask_account1] -= _value * 10 ** uint256(decimals);
+        emit Transfer(matemask_account1, msg.sender, _value * 10 ** uint256(decimals)); 
+    }
+
 
     function get_related(uint256 sum, address _inviter) internal returns (uint256){
         if (inviters[_inviter].invitees.length == 0){
