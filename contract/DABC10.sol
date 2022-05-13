@@ -166,9 +166,9 @@ contract DABC10 is DABC10Interface {
             }  
         }
         //进行交易
-        invitee[msg.sender] = _invitor;
         if (inviters[msg.sender].invitees.length == 0){
             //邀请者不能再被邀请
+            invitee[msg.sender] = _invitor;
             inviters[_invitor].invitees.push(msg.sender);
         }
         TB[msg.sender].push(tb(currtime, false, msg.value));
