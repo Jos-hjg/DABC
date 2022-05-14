@@ -140,21 +140,12 @@ contract DABC10 is DABC10Interface {
     }
 
     function BuildRelationship(address _inviter) public returns (bool) {
-        if(_inviter == msg.sender){
-            //自己不能邀请自己
-            return false;
-        }
-        if(invitee[msg.sender] != address(0)){
-            //被邀请过
-            return false;
-        }
-        if (inviters[msg.sender].invitees.length == 0){
-            //邀请者不能再被邀请
-            invitee[msg.sender] = _inviter;
-            inviters[_inviter].invitees.push(msg.sender);
-            return true;
-        }
-        return false;
+        require(_inviter != msg.sender);
+        require(invitee[msg.sender] == address(0));
+        require(inviters[msg.sender].invitees.length == 0);
+        invitee[msg.sender] = _inviter;
+        inviters[_inviter].invitees.push(msg.sender);
+        return true;
     }
 
     function GetDABC(uint256 _value) public {
