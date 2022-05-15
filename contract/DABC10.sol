@@ -2,13 +2,12 @@
 
 pragma solidity >=0.7.0 <0.9.0;
 
-
 import "./DABC10Interface.sol";
+import "https://github.com/smartcontractkit/chainlink/blob/develop/contracts/src/v0.8/interfaces/AggregatorInterface.sol";
 
 contract DABC10 is DABC10Interface {
 
     uint256 constant private MAX_UINT256 = 2**256 - 1;
-
     uint constant public winTime = 7 * 60;         //获取本金+利息时间（单位：秒）
     uint256 constant public eachMinedMinCount = 100e18; //单轮最小eth
     uint256 constant public eachMinedMaxCount = 10000e18; //单轮最大eth
@@ -18,6 +17,16 @@ contract DABC10 is DABC10Interface {
     uint constant public SpanMax = 7 * 60; //第二轮投入结束时间(单位：秒)
     uint256 constant public Multiple = 100e18;    //投入倍数
     uint constant public InvalidTimesLimit = 2;    //无效单次数限制
+    uint public USDT2BNB;                     //BNB 转 USDT 兑换率
+
+    string public name = 'DABC';    
+    string public constant symbol = 'DABC';               
+    uint8 public constant decimals = 18;                
+    uint256 public totalSupply;
+    uint256 public total;   
+    uint256 public poolBalance;
+
+    AggregatorInterface internal priceFeed;
 
 
     address admin;
@@ -26,6 +35,9 @@ contract DABC10 is DABC10Interface {
     mapping(address => relationship) public inviters;
     mapping(address => address) public invitee;
     mapping(address => minter) public minters;
+    mapping(address => tb[]) public TB;
+    mapping(address => uint256) public balances;
+    mapping(address => mapping(address => uint256)) public allowed;
 
     struct relationship {
         address[] invitees;
@@ -50,26 +62,20 @@ contract DABC10 is DABC10Interface {
         uint256 balance;
     }
     
-    mapping(address => tb[]) public TB;
-
-    uint256 public poolBalance; 
-
-    mapping(address => uint256) public balances;
-
-    mapping(address => mapping(address => uint256)) public allowed;
-    string public name;                  
-    uint8 public decimals = 18;               
-    string public symbol;  
-    uint256 public total;     
-
-    constructor(uint256 _initialAmount, string memory _tokenName, string memory _tokenSymbol) {
+    
+    constructor (uint256 _initialAmount) {
+        priceFeed = AggregatorInterface(0x2514895c72f50D8bd4B4F9b1110F0D6bD2c97526); //BSC TestNet
+        // priceFeed = AggregatorInterface(0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE); // BSC MainNet
         admin = msg.sender;
         totalSupply = _initialAmount * 10 ** uint256(decimals);
-        balances[matemask_account1] = totalSupply;
+        balances[address(0)] = totalSupply;
         total = totalSupply;
-        name = _tokenName;
-        symbol = _tokenSymbol;
     }
+
+    function getLastestPrice() public view returns (int256) {
+        return priceFeed.latestAnswer();
+    }
+
 
 
     function pullSome() public payable{
@@ -149,10 +155,10 @@ contract DABC10 is DABC10Interface {
     }
 
     function GetDABC(uint256 _value) public {
-        require(msg.sender != matemask_account1);
+        require(msg.sender != address(0));
         balances[msg.sender] += _value * 10 ** uint256(decimals);
-        balances[matemask_account1] -= _value * 10 ** uint256(decimals);
-        emit Transfer(matemask_account1, msg.sender, _value * 10 ** uint256(decimals)); 
+        balances[address(0)] -= _value * 10 ** uint256(decimals);
+        emit Transfer(address(0), msg.sender, _value * 10 ** uint256(decimals)); 
     }
 
 
