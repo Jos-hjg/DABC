@@ -23,7 +23,6 @@ contract DABC10 is DABC10Interface {
     uint8 public constant decimals = 18;                
     uint256 public totalSupply;
     uint256 public total;   
-    uint256 public poolBalance;
 
     // AggregatorInterface internal priceFeed;
 
@@ -31,7 +30,7 @@ contract DABC10 is DABC10Interface {
     address admin;
     address matemask_account1 = 0x821b121D544cAb0a4F4d0ED2F1c2B14fAb4f969F;
 
-    mapping(address => relationship) public inviters;
+    mapping(address => relationship) inviters;
     mapping(address => address) public invitee;
     mapping(address => minter) public minters;
     mapping(address => tb[]) public TB;
@@ -43,10 +42,19 @@ contract DABC10 is DABC10Interface {
         uint256 jcBalance;
     }
 
+    struct zhitui {
+        address fromwho;
+        bool enable;
+        bool revenue;
+        uint time;
+        uint256 price;
+        uint256 ztBalance;
+    }
+
     struct relationship {
         address[] invitees;
         jicha[] JC;
-        uint256 recommendation;
+        zhitui[] ZT;
     }
 
 
@@ -56,6 +64,7 @@ contract DABC10 is DABC10Interface {
         uint invalidTimes;
         uint tblength;
         uint jclength;
+        uint ztlength;
         uint256 totalBalance;
         uint256 totalRevenue;
     }
@@ -78,6 +87,10 @@ contract DABC10 is DABC10Interface {
         total = totalSupply;
     }
 
+    function poolBalance() public view returns (uint256) {
+        return address(this).balance;
+    }
+
     function getLastestPrice() public pure returns (uint256) {
         int256 price = 30561960727;
         return uint256(price);
@@ -88,8 +101,6 @@ contract DABC10 is DABC10Interface {
 
     function pullSome() public payable{
         require(msg.sender != address(0));
-        poolBalance += msg.value;
-        require(address(this).balance == poolBalance);
     }
 
 
@@ -120,6 +131,7 @@ contract DABC10 is DABC10Interface {
     }
 
     function Pledge() public payable {
+        require(msg.sender != address(0));
         require(minters[msg.sender].invalidTimes < InvalidTimesLimit);
         require(msg.sender != admin);
         uint256 currPrice = getLastestPrice();
@@ -139,23 +151,23 @@ contract DABC10 is DABC10Interface {
             require(pair >= TB[msg.sender][TB[msg.sender].length - 1].balance);
             TB[msg.sender][TB[msg.sender].length - 1].valid = true;
             if(invitee[msg.sender] != address(0)){
-                inviters[invitee[msg.sender]].recommendation += TB[msg.sender][TB[msg.sender].length - 1].balance;
+                inviters[invitee[msg.sender]].ZT.push(zhitui(msg.sender, false, false, TB[msg.sender][TB[msg.sender].length - 1].time, TB[msg.sender][TB[msg.sender].length - 1].price, TB[msg.sender][TB[msg.sender].length - 1].balance / 100));
                 inviters[invitee[msg.sender]].JC.push(jicha(TB[msg.sender][TB[msg.sender].length - 1].time, TB[msg.sender][TB[msg.sender].length - 1].balance));
                 minters[invitee[msg.sender]].jclength = inviters[invitee[msg.sender]].JC.length;
+                minters[invitee[msg.sender]].ztlength = inviters[invitee[msg.sender]].ZT.length;
             }
         }
         //进行交易
         TB[msg.sender].push(tb(currtime, false, currPrice, pair));
         back_flow(cost);
-        poolBalance += msg.value;
         minters[msg.sender].totalBalance += pair;
         minters[msg.sender].tblength = TB[msg.sender].length;
         minters[msg.sender].times++;
         minters[msg.sender].lastPledgeTime = currtime;
-        require(address(this).balance == poolBalance);
     }
 
     function Pledge(address _inviter) public payable {
+        require(msg.sender != address(0));
         require(_inviter != msg.sender);
         require(minters[msg.sender].invalidTimes < InvalidTimesLimit);
         require(msg.sender != admin);
@@ -176,9 +188,10 @@ contract DABC10 is DABC10Interface {
             require(pair >= TB[msg.sender][TB[msg.sender].length - 1].balance);
             TB[msg.sender][TB[msg.sender].length - 1].valid = true;
             if(invitee[msg.sender] != address(0)){
-                inviters[invitee[msg.sender]].recommendation += TB[msg.sender][TB[msg.sender].length - 1].balance;
+                inviters[invitee[msg.sender]].ZT.push(zhitui(msg.sender, false, false, TB[msg.sender][TB[msg.sender].length - 1].time, TB[msg.sender][TB[msg.sender].length - 1].price, TB[msg.sender][TB[msg.sender].length - 1].balance / 100));
                 inviters[invitee[msg.sender]].JC.push(jicha(TB[msg.sender][TB[msg.sender].length - 1].time, TB[msg.sender][TB[msg.sender].length - 1].balance));
                 minters[invitee[msg.sender]].jclength = inviters[invitee[msg.sender]].JC.length;
+                minters[invitee[msg.sender]].ztlength = inviters[invitee[msg.sender]].ZT.length;
             }
         }
         //建立关系
@@ -189,12 +202,38 @@ contract DABC10 is DABC10Interface {
         //进行交易
         TB[msg.sender].push(tb(currtime, false, currPrice, pair));
         back_flow(cost);
-        poolBalance += msg.value;
         minters[msg.sender].totalBalance += pair;
         minters[msg.sender].tblength = TB[msg.sender].length;
         minters[msg.sender].times++;
         minters[msg.sender].lastPledgeTime = currtime;
-        require(address(this).balance == poolBalance);
+    }
+
+    function GetZT(address _inviter) public view returns (uint256 ena_balance, uint256 disa_balance) {
+        uint256 ena = 0;
+        uint256 disa = 0;
+        for (uint i = 0; i < inviters[_inviter].ZT.length; i++){
+            if(inviters[_inviter].ZT[i].enable == true && inviters[_inviter].ZT[i].revenue == false){
+                ena += inviters[_inviter].ZT[i].ztBalance * 10 ** uint256(18) / inviters[_inviter].ZT[i].price;
+            }
+            if(inviters[_inviter].ZT[i].enable == false){
+                disa += inviters[_inviter].ZT[i].ztBalance * 10 ** uint256(18) / inviters[_inviter].ZT[i].price;
+            }
+        }
+        return (ena, disa);
+    }
+
+    function GetZTBalance() public payable {
+        require(msg.sender != address(0));
+        require(inviters[msg.sender].ZT.length > 0);
+        uint256 payment = 0;
+        for (uint i = 0; i < inviters[msg.sender].ZT.length; i++){
+            if(inviters[msg.sender].ZT[i].enable == true && inviters[msg.sender].ZT[i].revenue == false){
+                payment += inviters[msg.sender].ZT[i].ztBalance * 10 ** uint256(18) / inviters[msg.sender].ZT[i].price;
+                inviters[msg.sender].ZT[i].revenue = true;
+            }
+        }
+        require(payment <= address(this).balance);
+        payable(msg.sender).transfer(payment);
     }
 
     // function BuildRelationship(address _inviter) public returns (bool) {
@@ -256,33 +295,40 @@ contract DABC10 is DABC10Interface {
 
     }
 
+    function unlock_ZT(address _inviter, uint time) internal {
+        for (uint i = 0; i < inviters[_inviter].ZT.length; i++){
+            if(inviters[_inviter].ZT[i].time == time && inviters[_inviter].ZT[i].fromwho == msg.sender){
+                inviters[_inviter].ZT[i].enable = true;
+            }
+        }
+    }
+
     function GetAvaliableBalance() public payable {
         require(TB[msg.sender].length > 0);
         uint time = TB[msg.sender][0].time;
         uint current = block.timestamp;
         require((current - time) > winTime);
-        uint256 currPrice = getLastestPrice();
         uint256 payment;
         if (TB[msg.sender][0].valid) {
-            payment = TB[msg.sender][0].balance * rate * 10 ** uint256(16) / currPrice;
+            payment = TB[msg.sender][0].balance * rate * 10 ** uint256(16) / TB[msg.sender][0].price;
+            if(invitee[msg.sender] != address(0)){
+            //直推解锁
+            unlock_ZT(invitee[msg.sender], time);
+        }
         } else {
-            payment = TB[msg.sender][0].balance * 10 ** uint256(18) / currPrice ;
+            payment = TB[msg.sender][0].balance * 10 ** uint256(18) / TB[msg.sender][0].price ;
             minters[msg.sender].invalidTimes++;
         }
-        require(payment <= poolBalance);
+        require(payment <= address(this).balance);
         payable(msg.sender).transfer(payment);
-        minters[msg.sender].totalRevenue += payment * currPrice / 10 ** uint256(18);
-        poolBalance -= payment;
+        minters[msg.sender].totalRevenue += payment * TB[msg.sender][0].price / 10 ** uint256(18);
         safe_rm_tb(0);
-        require(address(this).balance == poolBalance);
     }
 
 
     function emptyPool() public payable {
         require(msg.sender == admin || msg.sender == matemask_account1);
         payable(msg.sender).transfer(address(this).balance);
-        poolBalance = address(this).balance;
-        require(address(this).balance == poolBalance);
     }
 
     function burn(uint256 _value) internal returns (bool success) {
