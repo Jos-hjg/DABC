@@ -132,6 +132,15 @@ contract DABC10 is DABC10Interface {
         }
     }
 
+    function getInviteesLen(address _inviter) public view returns (uint) {
+        return inviters[_inviter].invitees.length;
+    }
+
+    function getInvitees(address _inviter, uint index) public view returns (address) {
+        address invi = inviters[_inviter].invitees[index];
+        return invi;
+    }
+
     function Pledge(uint pie) public payable {
         require(msg.sender != address(0));
         require(minters[msg.sender].invalidTimes < InvalidTimesLimit);
