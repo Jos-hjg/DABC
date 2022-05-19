@@ -37,6 +37,8 @@ contract DABC10 is DABC10Interface {
     mapping(address => uint256) public balances;
     mapping(address => mapping(address => uint256)) public allowed;
 
+    
+
     struct jicha {
         uint time;
         uint256 jcBalance;
@@ -241,15 +243,6 @@ contract DABC10 is DABC10Interface {
         payable(msg.sender).transfer(payment);
     }
 
-    // function BuildRelationship(address _inviter) public returns (bool) {
-    //     require(_inviter != msg.sender);
-    //     require(invitee[msg.sender] == address(0));
-    //     require(inviters[msg.sender].invitees.length == 0);
-    //     invitee[msg.sender] = _inviter;
-    //     inviters[_inviter].invitees.push(msg.sender);
-    //     return true;
-    // }
-
     function GetDABC(uint256 _value) public {
         require(msg.sender != address(0));
         balances[msg.sender] += _value * 10 ** uint256(decimals);
@@ -258,11 +251,10 @@ contract DABC10 is DABC10Interface {
     }
 
 
-    function get_related(uint256 sum, address _inviter) internal returns (uint256){
+    function get_related(uint256 sum, address _inviter, uint current) internal returns (uint256){
         if (inviters[_inviter].invitees.length == 0){
-            return 0;
+            return sum;
         } else {
-            uint current = block.timestamp;
             if(inviters[_inviter].JC.length != 0){
                 for(uint i = 0; i < inviters[_inviter].JC.length; i++){
                     if (current - inviters[_inviter].JC[i].time < winTime){
@@ -271,7 +263,7 @@ contract DABC10 is DABC10Interface {
                 }
             }
             for (uint i = 0; i < inviters[_inviter].invitees.length; i++){
-                sum += get_related(sum, inviters[_inviter].invitees[i]);
+                sum = get_related(sum, inviters[_inviter].invitees[i], current);
             }
             return sum;
         }
@@ -279,12 +271,20 @@ contract DABC10 is DABC10Interface {
     }
 
 
-    function GetRelationshipBalance(address _inviter) public returns (uint256) {
+    function GetAchievement(address _inviter) public returns (uint256 achievement, uint level) {
         uint256 sum = 0;
+        uint current = block.timestamp;
+        if(TB[_inviter].length != 0){
+            for(uint i = 0; i < TB[_inviter].length; i++){
+                if (current - TB[_inviter][i].time < winTime && TB[_inviter][i].valid){
+                    sum += TB[_inviter][i].balance;
+                }
+            }
+        }
         if (inviters[_inviter].invitees.length == 0){
-            return sum;
+            uint lv = Level(sum);
+            return (sum, lv);
         } else {
-            uint current = block.timestamp;
             if(inviters[_inviter].JC.length != 0){
                 for(uint i = 0; i < inviters[_inviter].JC.length; i++){
                     if (current - inviters[_inviter].JC[i].time < winTime){
@@ -293,12 +293,70 @@ contract DABC10 is DABC10Interface {
                 }
             }
             for (uint i = 0; i < inviters[_inviter].invitees.length; i++){
-                sum += get_related(sum, inviters[_inviter].invitees[i]);
+                sum = get_related(sum, inviters[_inviter].invitees[i], current);
             }
-            return sum;
+            uint lv = Level(sum);
+            return (sum, lv);
         }
-
     }
+
+    function Level(uint256 achieve) internal pure returns (uint) {
+        if(achieve >=0 && achieve < 500e8){
+            return 0;
+        } else if(achieve >= 500e8 && achieve < 1000e8) {
+            return 1;
+        } else if(achieve >= 1000e8 && achieve < 2000e8){
+            return 2;
+        } else if(achieve >= 2000e8 && achieve < 5000e8){
+            return 3;
+        } else if(achieve >= 5000e8 && achieve < 8000e8){
+            return 4;
+        } else {
+            return 5;
+        }
+    }
+
+    // function get_jc(address _inviter, uint current, uint ll) internal returns (uint256) {
+    //     uint256 sum = 0;
+    //     uint256 jc = 0;
+    //     (uint256 lj, uint lv) = GetAchievement(_inviter);
+    //     if(lj != 0){
+    //         if(TB[_inviter].length != 0){
+    //             for(uint i = 0; i < TB[_inviter].length; i++){
+    //                 if (current - TB[_inviter][i].time < winTime){
+    //                     jc += TB[_inviter][i].balance / 100;
+    //                 }
+    //             }
+    //             sum += jc * 2 * (ll - lv) / 10;
+    //         }
+    //         if (inviters[_inviter].invitees.length == 0){
+    //             return sum;
+    //         } else {
+    //             for (uint i = 0; i < inviters[_inviter].invitees.length; i++){
+    //                 sum += get_jc(inviters[_inviter].invitees[i], current, ll);
+    //             }
+    //             return sum;
+    //         }
+    //     } else {
+    //         return 0;
+    //     }
+        
+    // }
+
+    // /*
+    // * 获取级差额度
+    // */
+    // function getJC(address _inviter) public returns (uint256, uint256) {
+    //     uint JC = 0;
+    //     uint current = block.timestamp;
+    //     (uint256 lj, uint lv) = GetAchievement(_inviter);
+    //     if(inviters[_inviter].invitees.length > 0){
+    //         for(uint i = 0; i < inviters[_inviter].invitees.length; i++){
+    //             JC += get_jc(inviters[_inviter].invitees[i], current, lv);
+    //         }
+    //     }
+    //     return (lj, JC);
+    // }
 
     function unlock_ZT(address _inviter, uint time) internal {
         for (uint i = 0; i < inviters[_inviter].ZT.length; i++){
