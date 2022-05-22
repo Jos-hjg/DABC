@@ -3,19 +3,18 @@
 pragma solidity >=0.7.0 <0.9.0;
 
 import "./DABC10Interface.sol";
-// import "https://github.com/smartcontractkit/chainlink/blob/develop/contracts/src/v0.8/interfaces/AggregatorInterface.sol";
 
 contract DABC10 is DABC10Interface {
 
     uint256 constant private MAX_UINT256 = 2**256 - 1;
     uint constant public winTime = 7 * 60;         //获取本金+利息时间（单位：秒）
-    uint256 constant public eachMinedMinCount = 100e8; //单轮最小
-    uint256 constant public eachMinedMaxCount = 10000e8; //单轮最大
+    uint256 constant public eachMinedMinCount = 1e17; //单轮最小
+    uint256 constant public eachMinedMaxCount = 10e18; //单轮最大
     uint public rate = 106;             //利率，例：107，表示7%
-    uint public Per = 10;             //消耗比率：10 USDT : 1 DABC
+    uint public Per = 100;             //消耗比率：1 BNB : 100 DABC
     uint constant public SpanMin = 1 * 30; //第二轮投入开始时间(单位：秒)
     uint constant public SpanMax = 7 * 60; //第二轮投入结束时间(单位：秒)
-    uint256 constant public Multiple = 100e8;    //投入倍数
+    uint256 constant public Multiple = 1e17;    //投入倍数
     uint constant public InvalidTimesLimit = 2;    //无效单次数限制
 
     string public name = 'DABC';    
@@ -23,9 +22,6 @@ contract DABC10 is DABC10Interface {
     uint8 public constant decimals = 18;                
     uint256 public totalSupply;
     uint256 public total;   
-
-    // AggregatorInterface internal priceFeed;
-
 
     address admin;
     address matemask_account1 = 0x821b121D544cAb0a4F4d0ED2F1c2B14fAb4f969F;
@@ -49,7 +45,6 @@ contract DABC10 is DABC10Interface {
         bool enable;
         bool revenue;
         uint time;
-        uint256 price;
         uint256 ztBalance;
     }
 
@@ -75,14 +70,11 @@ contract DABC10 is DABC10Interface {
     struct tb {
         uint time;
         bool valid;
-        uint256 price;
         uint256 balance;
     }
     
     
     constructor (uint256 _initialAmount) {
-        // priceFeed = AggregatorInterface(0x2514895c72f50D8bd4B4F9b1110F0D6bD2c97526); //BSC TestNet
-        // priceFeed = AggregatorInterface(0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE); // BSC MainNet
         admin = msg.sender;
         totalSupply = _initialAmount * 10 ** uint256(decimals);
         balances[address(0)] = totalSupply;
@@ -91,12 +83,6 @@ contract DABC10 is DABC10Interface {
 
     function poolBalance() public view returns (uint256) {
         return address(this).balance;
-    }
-
-    function getLastestPrice() public pure returns (uint256) {
-        int256 price = 30561960727;
-        return uint256(price);
-        // return uint256(priceFeed.latestAnswer());
     }
 
 
@@ -141,18 +127,14 @@ contract DABC10 is DABC10Interface {
         return invi;
     }
 
-    function Pledge(uint pie) public payable {
+    function Pledge() public payable {
         require(msg.sender != address(0));
         require(minters[msg.sender].invalidTimes < InvalidTimesLimit);
         require(msg.sender != admin);
-        uint256 currPrice = getLastestPrice();
-        uint256 pair = msg.value * currPrice / (10 ** uint256(18));
-        uint256 usdt = pie * 100 * 10 ** 8;
-        require(usdt - pair <= 10);
-        require(usdt >= eachMinedMinCount && usdt <= eachMinedMaxCount);                
-        require(usdt % Multiple == 0);
+        require(msg.value >= eachMinedMinCount && msg.value <= eachMinedMaxCount);                
+        require(msg.value % Multiple == 0);
         state_per();
-        uint256 cost = pie * Per;
+        uint256 cost = msg.value * Per;
         require(balances[msg.sender] >= cost);
         uint currtime = block.timestamp;
         //检测是否二次投入
@@ -161,37 +143,33 @@ contract DABC10 is DABC10Interface {
             uint lasttime = TB[msg.sender][TB[msg.sender].length - 1].time;
             uint span = currtime - lasttime;
             require(span > SpanMin && span < SpanMax);
-            require(usdt >= TB[msg.sender][TB[msg.sender].length - 1].balance);
+            require(msg.value >= TB[msg.sender][TB[msg.sender].length - 1].balance);
             TB[msg.sender][TB[msg.sender].length - 1].valid = true;
             if(invitee[msg.sender] != address(0)){
-                inviters[invitee[msg.sender]].ZT.push(zhitui(msg.sender, false, false, TB[msg.sender][TB[msg.sender].length - 1].time, TB[msg.sender][TB[msg.sender].length - 1].price, TB[msg.sender][TB[msg.sender].length - 1].balance / 100));
+                inviters[invitee[msg.sender]].ZT.push(zhitui(msg.sender, false, false, TB[msg.sender][TB[msg.sender].length - 1].time, TB[msg.sender][TB[msg.sender].length - 1].balance * 3 / 100));
                 inviters[invitee[msg.sender]].JC.push(jicha(TB[msg.sender][TB[msg.sender].length - 1].time, TB[msg.sender][TB[msg.sender].length - 1].balance));
                 minters[invitee[msg.sender]].jclength = inviters[invitee[msg.sender]].JC.length;
                 minters[invitee[msg.sender]].ztlength = inviters[invitee[msg.sender]].ZT.length;
             }
         }
         //进行交易
-        TB[msg.sender].push(tb(currtime, false, currPrice, usdt));
+        TB[msg.sender].push(tb(currtime, false, msg.value));
         back_flow(cost);
-        minters[msg.sender].totalBalance += usdt;
+        minters[msg.sender].totalBalance += msg.value;
         minters[msg.sender].tblength = TB[msg.sender].length;
         minters[msg.sender].times++;
         minters[msg.sender].lastPledgeTime = currtime;
     }
 
-    function Pledge(address _inviter, uint pie) public payable {
+    function Pledge(address _inviter) public payable {
         require(msg.sender != address(0));
         require(_inviter != msg.sender);
         require(minters[msg.sender].invalidTimes < InvalidTimesLimit);
         require(msg.sender != admin);
-        uint256 currPrice = getLastestPrice();
-        uint256 pair = msg.value * currPrice / (10 ** uint256(18));
-        uint256 usdt = pie * 100 * 10 ** 8;
-        require(usdt - pair <= 10);
-        require(usdt >= eachMinedMinCount && usdt <= eachMinedMaxCount);                
-        require(usdt % Multiple == 0);
+        require(msg.value >= eachMinedMinCount && msg.value <= eachMinedMaxCount);                
+        require(msg.value % Multiple == 0);
         state_per();
-        uint256 cost = pie * Per;
+        uint256 cost = msg.value * Per;
         require(balances[msg.sender] >= cost);
         uint currtime = block.timestamp;
         //检测是否二次投入
@@ -200,10 +178,10 @@ contract DABC10 is DABC10Interface {
             uint lasttime = TB[msg.sender][TB[msg.sender].length - 1].time;
             uint span = currtime - lasttime;
             require(span > SpanMin && span < SpanMax);
-            require(usdt >= TB[msg.sender][TB[msg.sender].length - 1].balance);
+            require(msg.value >= TB[msg.sender][TB[msg.sender].length - 1].balance);
             TB[msg.sender][TB[msg.sender].length - 1].valid = true;
             if(invitee[msg.sender] != address(0)){
-                inviters[invitee[msg.sender]].ZT.push(zhitui(msg.sender, false, false, TB[msg.sender][TB[msg.sender].length - 1].time, TB[msg.sender][TB[msg.sender].length - 1].price, TB[msg.sender][TB[msg.sender].length - 1].balance / 100));
+                inviters[invitee[msg.sender]].ZT.push(zhitui(msg.sender, false, false, TB[msg.sender][TB[msg.sender].length - 1].time, TB[msg.sender][TB[msg.sender].length - 1].balance * 3 / 100));
                 inviters[invitee[msg.sender]].JC.push(jicha(TB[msg.sender][TB[msg.sender].length - 1].time, TB[msg.sender][TB[msg.sender].length - 1].balance));
                 minters[invitee[msg.sender]].jclength = inviters[invitee[msg.sender]].JC.length;
                 minters[invitee[msg.sender]].ztlength = inviters[invitee[msg.sender]].ZT.length;
@@ -215,9 +193,9 @@ contract DABC10 is DABC10Interface {
             inviters[_inviter].invitees.push(msg.sender);
         }
         //进行交易
-        TB[msg.sender].push(tb(currtime, false, currPrice, usdt));
+        TB[msg.sender].push(tb(currtime, false, msg.value));
         back_flow(cost);
-        minters[msg.sender].totalBalance += pair;
+        minters[msg.sender].totalBalance += msg.value;
         minters[msg.sender].tblength = TB[msg.sender].length;
         minters[msg.sender].times++;
         minters[msg.sender].lastPledgeTime = currtime;
@@ -228,10 +206,10 @@ contract DABC10 is DABC10Interface {
         uint256 disa = 0;
         for (uint i = 0; i < inviters[_inviter].ZT.length; i++){
             if(inviters[_inviter].ZT[i].enable == true && inviters[_inviter].ZT[i].revenue == false){
-                ena += inviters[_inviter].ZT[i].ztBalance * 10 ** uint256(18) / inviters[_inviter].ZT[i].price;
+                ena += inviters[_inviter].ZT[i].ztBalance;
             }
             if(inviters[_inviter].ZT[i].enable == false){
-                disa += inviters[_inviter].ZT[i].ztBalance * 10 ** uint256(18) / inviters[_inviter].ZT[i].price;
+                disa += inviters[_inviter].ZT[i].ztBalance;
             }
         }
         return (ena, disa);
@@ -243,7 +221,7 @@ contract DABC10 is DABC10Interface {
         uint256 payment = 0;
         for (uint i = 0; i < inviters[msg.sender].ZT.length; i++){
             if(inviters[msg.sender].ZT[i].enable == true && inviters[msg.sender].ZT[i].revenue == false){
-                payment += inviters[msg.sender].ZT[i].ztBalance * 10 ** uint256(18) / inviters[msg.sender].ZT[i].price;
+                payment += inviters[msg.sender].ZT[i].ztBalance;
                 inviters[msg.sender].ZT[i].revenue = true;
             }
         }
@@ -382,18 +360,18 @@ contract DABC10 is DABC10Interface {
         require((current - time) > winTime);
         uint256 payment;
         if (TB[msg.sender][0].valid) {
-            payment = TB[msg.sender][0].balance * rate * 10 ** uint256(16) / TB[msg.sender][0].price;
+            payment = TB[msg.sender][0].balance * rate / 100;
             if(invitee[msg.sender] != address(0)){
-            //直推解锁
-            unlock_ZT(invitee[msg.sender], time);
-        }
+                //直推解锁
+                unlock_ZT(invitee[msg.sender], time);
+            }
         } else {
-            payment = TB[msg.sender][0].balance * 10 ** uint256(18) / TB[msg.sender][0].price ;
+            payment = TB[msg.sender][0].balance;
             minters[msg.sender].invalidTimes++;
         }
         require(payment <= address(this).balance);
         payable(msg.sender).transfer(payment);
-        minters[msg.sender].totalRevenue += payment * TB[msg.sender][0].price / 10 ** uint256(18);
+        minters[msg.sender].totalRevenue += payment;
         safe_rm_tb(0);
     }
 
@@ -412,7 +390,7 @@ contract DABC10 is DABC10Interface {
     }
 
     function back_flow(uint256 _value) internal {
-        uint256 part = _value * 10 ** uint256(18) / 2;
+        uint256 part = _value / 2;
         burn(part);
         transfer(admin, part);
     }
