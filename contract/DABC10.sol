@@ -10,12 +10,14 @@ contract DABC10 is DABC10Interface {
     uint constant public winTime = 7 * 60;         //获取本金+利息时间（单位：秒）
     uint256 constant public eachMinedMinCount = 1e17; //单轮最小
     uint256 constant public eachMinedMaxCount = 10e18; //单轮最大
-    uint public rate = 106;             //利率，例：107，表示7%
+    uint public rate = 106;             //利率，例：106，表示106%
+    uint public ZTRate = 3;           //直推利息，3%
     uint public Per = 100;             //消耗比率：1 BNB : 100 DABC
     uint constant public SpanMin = 1 * 30; //第二轮投入开始时间(单位：秒)
     uint constant public SpanMax = 7 * 60; //第二轮投入结束时间(单位：秒)
     uint256 constant public Multiple = 1e17;    //投入倍数
     uint constant public InvalidTimesLimit = 2;    //无效单次数限制
+    uint256 constant public OOD = 15 * 60;   //15天没有再质押则拉黑名单（测试：15分钟）
 
     string public name = 'DABC';    
     string public constant symbol = 'DABC';               
@@ -85,8 +87,6 @@ contract DABC10 is DABC10Interface {
         return address(this).balance;
     }
 
-
-
     function pullSome() public payable{
         require(msg.sender != address(0));
     }
@@ -110,6 +110,11 @@ contract DABC10 is DABC10Interface {
         return true;
     }
 
+    function resetTimes() public returns (bool) {
+        minters[msg.sender].times = 0;
+        return true;
+    }
+
     function state_per() internal {
         if (totalSupply <= total / 2 && totalSupply >= total / 4){
             Per = 50;
@@ -118,13 +123,9 @@ contract DABC10 is DABC10Interface {
         }
     }
 
-    function getInviteesLen(address _inviter) public view returns (uint) {
-        return inviters[_inviter].invitees.length;
-    }
-
-    function getInvitees(address _inviter, uint index) public view returns (address) {
-        address invi = inviters[_inviter].invitees[index];
-        return invi;
+    function getInvitees(address _inviter) public view returns (address[] memory) {
+        address[] memory addr = inviters[_inviter].invitees;
+        return addr;
     }
 
     function Pledge() public payable {
@@ -137,6 +138,9 @@ contract DABC10 is DABC10Interface {
         uint256 cost = msg.value * Per;
         require(balances[msg.sender] >= cost);
         uint currtime = block.timestamp;
+        if(minters[msg.sender].times != 0){
+            require(currtime - minters[msg.sender].lastPledgeTime <= OOD);
+        }
         //检测是否二次投入
         if (TB[msg.sender].length > 0) {
             //在规定的时间内投入
@@ -172,6 +176,9 @@ contract DABC10 is DABC10Interface {
         uint256 cost = msg.value * Per;
         require(balances[msg.sender] >= cost);
         uint currtime = block.timestamp;
+        if(minters[msg.sender].times != 0){
+            require(currtime - minters[msg.sender].lastPledgeTime <= OOD);
+        }
         //检测是否二次投入
         if (TB[msg.sender].length > 0) {
             //在规定的时间内投入
@@ -258,7 +265,7 @@ contract DABC10 is DABC10Interface {
     }
 
 
-    function GetAchievement(address _inviter) public returns (uint256 achievement, uint level) {
+    function GetAchievement(address _inviter) public returns (uint256 achievement) {
         uint256 sum = 0;
         uint current = block.timestamp;
         if(TB[_inviter].length != 0){
@@ -269,8 +276,7 @@ contract DABC10 is DABC10Interface {
             }
         }
         if (inviters[_inviter].invitees.length == 0){
-            uint lv = Level(sum);
-            return (sum, lv);
+            return sum;
         } else {
             if(inviters[_inviter].JC.length != 0){
                 for(uint i = 0; i < inviters[_inviter].JC.length; i++){
@@ -282,26 +288,25 @@ contract DABC10 is DABC10Interface {
             for (uint i = 0; i < inviters[_inviter].invitees.length; i++){
                 sum = get_related(sum, inviters[_inviter].invitees[i], current);
             }
-            uint lv = Level(sum);
-            return (sum, lv);
+            return sum;
         }
     }
 
-    function Level(uint256 achieve) internal pure returns (uint) {
-        if(achieve >=0 && achieve < 500e8){
-            return 0;
-        } else if(achieve >= 500e8 && achieve < 1000e8) {
-            return 1;
-        } else if(achieve >= 1000e8 && achieve < 2000e8){
-            return 2;
-        } else if(achieve >= 2000e8 && achieve < 5000e8){
-            return 3;
-        } else if(achieve >= 5000e8 && achieve < 8000e8){
-            return 4;
-        } else {
-            return 5;
-        }
-    }
+    // function Level(uint256 achieve) internal pure returns (uint) {
+    //     if(achieve >=0 && achieve < 500e8){
+    //         return 0;
+    //     } else if(achieve >= 500e8 && achieve < 1000e8) {
+    //         return 1;
+    //     } else if(achieve >= 1000e8 && achieve < 2000e8){
+    //         return 2;
+    //     } else if(achieve >= 2000e8 && achieve < 5000e8){
+    //         return 3;
+    //     } else if(achieve >= 5000e8 && achieve < 8000e8){
+    //         return 4;
+    //     } else {
+    //         return 5;
+    //     }
+    // }
 
     // function get_jc(address _inviter, uint current, uint ll) internal returns (uint256) {
     //     uint256 sum = 0;
