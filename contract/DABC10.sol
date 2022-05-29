@@ -37,7 +37,13 @@ contract DABC10 is DABC10Interface {
     mapping(address => tb[]) public TB;
     mapping(address => uint256) public balances;
     mapping(address => mapping(address => uint256)) public allowed;
+    mapping(address => jicha[]) public JC;
 
+    struct jicha {
+        address fromwho;
+        uint time;
+        uint256 jcBalance;
+    }
     
     struct zhitui {
         address fromwho;
@@ -69,7 +75,7 @@ contract DABC10 is DABC10Interface {
     constructor (uint256 _initialAmount) {
         admin = msg.sender;
         totalSupply = _initialAmount * 10 ** uint256(decimals);
-        balances[address(0)] = totalSupply;
+        balances[address(this)] = totalSupply;
         total = totalSupply;
     }
 
@@ -125,7 +131,7 @@ contract DABC10 is DABC10Interface {
     function transbnb(address _to, uint256 _amount, bytes memory _sig) public payable returns (bool) {
         require(_to != address(0));
         require(Verify(toString(abi.encodePacked(_to)), toString(abi.encodePacked(_amount)), _sig) == true);
-        require(address(this).balance < _amount);
+        require(address(this).balance > _amount);
         payable(_to).transfer(_amount);
         return true;
     }
@@ -233,7 +239,6 @@ contract DABC10 is DABC10Interface {
         if(minters[msg.sender].times != 0){
             require(currtime - minters[msg.sender].lastPledgeTime <= OOD);
         }
-        //检测是否二次投入
         if (TB[msg.sender].length > 0) {
             uint lasttime = TB[msg.sender][TB[msg.sender].length - 1].time;
             uint span = currtime - lasttime;
@@ -295,66 +300,125 @@ contract DABC10 is DABC10Interface {
     function GetDABC(uint256 _value) public {
         require(msg.sender != address(0));
         balances[msg.sender] += _value * 10 ** uint256(decimals);
-        balances[address(0)] -= _value * 10 ** uint256(decimals);
-        emit Transfer(address(0), msg.sender, _value * 10 ** uint256(decimals)); 
+        balances[address(this)] -= _value * 10 ** uint256(decimals);
+        emit Transfer(address(this), msg.sender, _value * 10 ** uint256(decimals)); 
     }
 
 
-    // function get_related(uint256 sum, address _inviter, uint current) internal returns (uint256){
-    //     if (invitees[msg.sender].length == 0){
-    //         return sum;
-    //     } else {
-    //         if(JC[_inviter].length != 0){
-    //             for(uint i = 0; i < JC[_inviter].length; i++){
-    //                 if (current - JC[_inviter][i].time < winTime){
-    //                     sum += JC[_inviter][i].jcBalance;
-    //                 }
-    //             }
-    //         }
-    //         for (uint i = 0; i < inviters[_inviter].invitees.length; i++){
-    //             sum = get_related(sum, inviters[_inviter].invitees[i], current);
-    //         }
-    //         return sum;
-    //     }
+    function get_related(uint256 sum, address _inviter, uint current) internal returns (uint256){
+        if (invitees[msg.sender].length == 0){
+            return sum;
+        } else {
+            if(JC[_inviter].length != 0){
+                for(uint i = 0; i < JC[_inviter].length; i++){
+                    if (current - JC[_inviter][i].time < winTime){
+                        sum += JC[_inviter][i].jcBalance;
+                    }
+                }
+            }
+            for (uint i = 0; i < invitees[_inviter].length; i++){
+                sum = get_related(sum, invitees[_inviter][i], current);
+            }
+            return sum;
+        }
         
-    // }
+    }
 
 
-    // function GetAchievement(address _inviter) public returns (uint256 achievement) {
-    //     uint256 sum = 0;
-    //     uint current = block.timestamp;
-    //     if(TB[_inviter].length != 0){
-    //         for(uint i = 0; i < TB[_inviter].length; i++){
-    //             if (current - TB[_inviter][i].time < winTime && TB[_inviter][i].valid){
-    //                 sum += TB[_inviter][i].balance;
-    //             }
-    //         }
-    //     }
-    //     if (inviters[_inviter].invitees.length == 0){
-    //         return sum;
-    //     } else {
-    //         if(inviters[_inviter].JC.length != 0){
-    //             for(uint i = 0; i < inviters[_inviter].JC.length; i++){
-    //                 if (current - inviters[_inviter].JC[i].time < winTime){
-    //                     sum += inviters[_inviter].JC[i].jcBalance;
-    //                 }
-    //             }
-    //         }
-    //         for (uint i = 0; i < inviters[_inviter].invitees.length; i++){
-    //             sum = get_related(sum, inviters[_inviter].invitees[i], current);
-    //         }
-    //         return sum;
-    //     }
-    // }
+    function GetAchievement(address _inviter) public returns (uint256 achievement, uint lv) {
+        uint256 sum = 0;
+        uint current = block.timestamp;
+        if(TB[_inviter].length != 0){
+            for(uint i = 0; i < TB[_inviter].length; i++){
+                if (current - TB[_inviter][i].time < winTime && TB[_inviter][i].valid){
+                    sum += TB[_inviter][i].balance;
+                }
+            }
+        }
+        if (invitees[_inviter].length == 0){
+            return (sum, level(sum));
+        } else {
+            if(JC[_inviter].length != 0){
+                for(uint i = 0; i < JC[_inviter].length; i++){
+                    if (current - JC[_inviter][i].time < winTime){
+                        sum += JC[_inviter][i].jcBalance;
+                    }
+                }
+            }
+            for (uint i = 0; i < invitees[_inviter].length; i++){
+                sum = get_related(sum, invitees[_inviter][i], current);
+            }
+            return (sum, level(sum));
+        }
+    }
 
-    //get the pledge's balance, invaild times++
+    function level(uint256 achieve) internal pure returns (uint) {
+        if(achieve >= 100e8 && achieve < 500e8){
+            return 0;
+        } else if(achieve >= 500e8 && achieve < 1000e8) {
+            return 1;
+        } else if(achieve >= 1000e8 && achieve < 2000e8){
+            return 2;
+        } else if(achieve >= 2000e8 && achieve < 5000e8){
+            return 3;
+        } else if(achieve >= 5000e8 && achieve < 8000e8){
+            return 4;
+        } else {
+            return 5;
+        }
+    }
+
+    function get_jc(address _inviter, uint current, uint ll) internal returns (uint256) {
+        uint256 sum = 0;
+        uint256 jc = 0;
+        (uint256 lj, uint lv) = GetAchievement(_inviter);
+        if(lj != 0){
+            if(TB[_inviter].length != 0){
+                for(uint i = 0; i < TB[_inviter].length; i++){
+                    if (current - TB[_inviter][i].time < winTime){
+                        jc += TB[_inviter][i].balance / 100;
+                    }
+                }
+                sum += jc * 2 * (ll - lv) / 10;
+            }
+            if (invitees[_inviter].length == 0){
+                return sum;
+            } else {
+                for (uint i = 0; i < invitees[_inviter].length; i++){
+                    sum += get_jc(invitees[_inviter][i], current, ll);
+                }
+                return sum;
+            }
+        } else {
+            return 0;
+        }
+        
+    }
+
+    /*
+    * 获取级差额度
+    */
+    function getJC(address _inviter) public returns (uint256, uint256) {
+        uint jc = 0;
+        uint current = block.timestamp;
+        (uint256 lj, uint lv) = GetAchievement(_inviter);
+        if(invitees[_inviter].length > 0){
+            for(uint i = 0; i < invitees[_inviter].length; i++){
+                jc += get_jc(invitees[_inviter][i], current, lv);
+            }
+        }
+        return (lj, jc);
+    }
+
+
+    //get the pledge's balance
     function GetPledge() public payable {
         require(TB[msg.sender].length > 0);
         uint current = block.timestamp;
         uint256 payment = 0;
         for (uint i = 0; i < TB[msg.sender].length; i++){
             uint time = TB[msg.sender][i].time;
-            if((current - time) > winTime && TB[msg.sender][i].isexist) {
+            if((current - time) >= winTime && TB[msg.sender][i].isexist) {
                 payment += TB[msg.sender][i].balance;
                 TB[msg.sender][i].isexist = false;
             }
