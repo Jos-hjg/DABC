@@ -48,6 +48,7 @@ contract DABC10 is DABC10Interface {
     struct zhitui {
         address fromwho;
         bool enable;
+        bool burning;
         uint time;
         uint256 ztBalance;
     }
@@ -248,8 +249,13 @@ contract DABC10 is DABC10Interface {
                 TB[msg.sender][TB[msg.sender].length - 1].valid = true;
                 reward[msg.sender] += TB[msg.sender][TB[msg.sender].length - 1].balance * rate / 100;
                 if(getInvitor[msg.sender] != address(0)){
+                    uint256 inviter_valid = get_valid(getInvitor[msg.sender], currtime);
                     //inviter exist
-                    ZT[getInvitor[msg.sender]].push(zhitui(msg.sender, true, TB[msg.sender][TB[msg.sender].length - 1].time, TB[msg.sender][TB[msg.sender].length - 1].balance * ZTRate / 100));
+                    ZT[getInvitor[msg.sender]].push(zhitui(msg.sender,
+                    true, 
+                    inviter_valid >= TB[msg.sender][TB[msg.sender].length - 1].balance? true : false,
+                    TB[msg.sender][TB[msg.sender].length - 1].time, 
+                    (inviter_valid >= TB[msg.sender][TB[msg.sender].length - 1].balance? TB[msg.sender][TB[msg.sender].length - 1].balance : inviter_valid) * ZTRate / 100));
                     minters[getInvitor[msg.sender]].ztlength = ZT[getInvitor[msg.sender]].length;
                 }
             } else {
@@ -306,50 +312,33 @@ contract DABC10 is DABC10Interface {
 
 
     function get_related(uint256 sum, address _inviter, uint current) internal returns (uint256){
-        if (invitees[msg.sender].length == 0){
-            return sum;
-        } else {
-            if(JC[_inviter].length != 0){
-                for(uint i = 0; i < JC[_inviter].length; i++){
-                    if (current - JC[_inviter][i].time < winTime){
-                        sum += JC[_inviter][i].jcBalance;
-                    }
-                }
-            }
-            for (uint i = 0; i < invitees[_inviter].length; i++){
-                sum = get_related(sum, invitees[_inviter][i], current);
-            }
-            return sum;
+        sum += get_valid(_inviter, current);
+        for (uint i = 0; i < invitees[_inviter].length; i++){
+            sum = get_related(sum, invitees[_inviter][i], current);
         }
-        
+        return sum;   
     }
 
 
     function GetAchievement(address _inviter) public returns (uint256 achievement, uint lv) {
+        require(_inviter != address(0));
         uint256 sum = 0;
         uint current = block.timestamp;
-        if(TB[_inviter].length != 0){
-            for(uint i = 0; i < TB[_inviter].length; i++){
-                if (current - TB[_inviter][i].time < winTime && TB[_inviter][i].valid){
-                    sum += TB[_inviter][i].balance;
-                }
-            }
-        }
+        // if(TB[_inviter].length != 0){
+        //     for(uint i = 0; i < TB[_inviter].length; i++){
+        //         if (current - TB[_inviter][i].time < winTime && TB[_inviter][i].valid){
+        //             sum += TB[_inviter][i].balance;
+        //         }
+        //     }
+        // }
+        sum = get_valid(_inviter, current);
         if (invitees[_inviter].length == 0){
             return (sum, level(sum));
-        } else {
-            if(JC[_inviter].length != 0){
-                for(uint i = 0; i < JC[_inviter].length; i++){
-                    if (current - JC[_inviter][i].time < winTime){
-                        sum += JC[_inviter][i].jcBalance;
-                    }
-                }
-            }
-            for (uint i = 0; i < invitees[_inviter].length; i++){
-                sum = get_related(sum, invitees[_inviter][i], current);
-            }
-            return (sum, level(sum));
+        } 
+        for (uint i = 0; i < invitees[_inviter].length; i++){
+            sum = get_related(sum, invitees[_inviter][i], current);
         }
+        return (sum, level(sum));  
     }
 
     function level(uint256 achieve) internal pure returns (uint) {
@@ -368,19 +357,25 @@ contract DABC10 is DABC10Interface {
         }
     }
 
+    function get_valid(address owner, uint current) internal view returns (uint256) {
+        uint256 sum = 0;
+        if(TB[owner].length > 1){
+            if (current - TB[owner][TB[owner].length - 1].time <= (winTime + SpanMax) && 
+            TB[owner][TB[owner].length - 2].valid){
+                sum += TB[owner][TB[owner].length - 2].balance;
+            }
+            
+        }
+        return sum;
+    }
+
     function get_jc(address _inviter, uint current, uint ll) internal returns (uint256) {
         uint256 sum = 0;
         uint256 jc = 0;
         (uint256 lj, uint lv) = GetAchievement(_inviter);
         if(lj != 0){
-            if(TB[_inviter].length != 0){
-                for(uint i = 0; i < TB[_inviter].length; i++){
-                    if (current - TB[_inviter][i].time < winTime){
-                        jc += TB[_inviter][i].balance / 100;
-                    }
-                }
-                sum += jc * 2 * (ll - lv) / 10;
-            }
+            jc = get_valid(_inviter, current) / 100;
+            sum += jc * 2 * (ll - lv) / 10;
             if (invitees[_inviter].length == 0){
                 return sum;
             } else {
