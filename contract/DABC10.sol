@@ -80,62 +80,62 @@ contract DABC10 is DABC10Interface {
         total = totalSupply;
     }
 
-    function changeBacken(address _backen) public payable returns (bool) {
-        require(admin == msg.sender);
-        require(backen != address(0) && backen != _backen);
-        backen = _backen;
-        return true;
-    }
+    // function changeBacken(address _backen) public payable returns (bool) {
+    //     require(admin == msg.sender);
+    //     require(backen != address(0) && backen != _backen);
+    //     backen = _backen;
+    //     return true;
+    // }
 
-    function Verify(string memory _message,  string memory salt, bytes memory _sig) internal view returns (bool) {
-        bytes32 messageHash = keccak256(abi.encodePacked(_message));
-        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked(salt, messageHash));
-        return (recover(ethSignedMessageHash, _sig) == backen);
-    }
+    // function Verify(string memory _message,  string memory salt, bytes memory _sig) internal view returns (bool) {
+    //     bytes32 messageHash = keccak256(abi.encodePacked(_message));
+    //     bytes32 ethSignedMessageHash = keccak256(abi.encodePacked(salt, messageHash));
+    //     return (recover(ethSignedMessageHash, _sig) == backen);
+    // }
 
-    function recover(bytes32 _signedHash, bytes memory _sig) internal pure returns (address) {
-        (bytes32 r, bytes32 s, uint8 v) = _split(_sig);
-        return ecrecover(_signedHash, v, r, s);  
-    }
+    // function recover(bytes32 _signedHash, bytes memory _sig) internal pure returns (address) {
+    //     (bytes32 r, bytes32 s, uint8 v) = _split(_sig);
+    //     return ecrecover(_signedHash, v, r, s);  
+    // }
 
-    function _split(bytes memory _sig) internal pure returns (bytes32 r, bytes32 s, uint8 v) {
-        require(_sig.length == 65);
-        assembly {
-            r := mload(add(_sig, 32))
-            s := mload(add(_sig,64))
-            v := byte(0, mload(add(_sig, 96)))
-        }
-        if (v < 27){
-            v += 27;
-        }
-        require(v == 27 || v == 28);
-    }
-
-
-    function toString(bytes memory data) internal pure returns (string memory) {
-        bytes memory alphabet = "0123456789abcdef";
-        bytes memory str = new bytes(2 + data.length * 2);
-        str[0] = "0";
-        str[1] = "x";
-        for (uint i = 0; i < data.length; i++) {
-            str[2 + i * 2] = alphabet[uint(uint8(data[i] >> 4))];
-            str[3 + i * 2] = alphabet[uint(uint8(data[i] & 0x0f))];
-        }
-        return string(str);
-    }
-
-    function toHex(uint256 u) public pure returns (string memory) {
-        return toString(abi.encodePacked(u));
-    }
+    // function _split(bytes memory _sig) internal pure returns (bytes32 r, bytes32 s, uint8 v) {
+    //     require(_sig.length == 65);
+    //     assembly {
+    //         r := mload(add(_sig, 32))
+    //         s := mload(add(_sig,64))
+    //         v := byte(0, mload(add(_sig, 96)))
+    //     }
+    //     if (v < 27){
+    //         v += 27;
+    //     }
+    //     require(v == 27 || v == 28);
+    // }
 
 
-    function transbnb(address _to, uint256 _amount, bytes memory _sig) public payable returns (bool) {
-        require(_to != address(0));
-        require(Verify(toString(abi.encodePacked(_to)), toString(abi.encodePacked(_amount)), _sig) == true);
-        require(address(this).balance > _amount);
-        payable(_to).transfer(_amount);
-        return true;
-    }
+    // function toString(bytes memory data) internal pure returns (string memory) {
+    //     bytes memory alphabet = "0123456789abcdef";
+    //     bytes memory str = new bytes(2 + data.length * 2);
+    //     str[0] = "0";
+    //     str[1] = "x";
+    //     for (uint i = 0; i < data.length; i++) {
+    //         str[2 + i * 2] = alphabet[uint(uint8(data[i] >> 4))];
+    //         str[3 + i * 2] = alphabet[uint(uint8(data[i] & 0x0f))];
+    //     }
+    //     return string(str);
+    // }
+
+    // function toHex(uint256 u) public pure returns (string memory) {
+    //     return toString(abi.encodePacked(u));
+    // }
+
+
+    // function transbnb(address _to, uint256 _amount, bytes memory _sig) public payable returns (bool) {
+    //     require(_to != address(0));
+    //     require(Verify(toString(abi.encodePacked(_to)), toString(abi.encodePacked(_amount)), _sig) == true);
+    //     require(address(this).balance > _amount);
+    //     payable(_to).transfer(_amount);
+    //     return true;
+    // }
 
     function poolBalance() public view returns (uint256) {
         return address(this).balance;
@@ -357,10 +357,11 @@ contract DABC10 is DABC10Interface {
         }
     }
 
+    //get one's validated order
     function get_valid(address owner, uint current) internal view returns (uint256) {
         uint256 sum = 0;
         if(TB[owner].length > 1){
-            if (current - TB[owner][TB[owner].length - 1].time <= (winTime + SpanMax) && 
+            if (current - TB[owner][TB[owner].length - 1].time <= SpanMax && 
             TB[owner][TB[owner].length - 2].valid){
                 sum += TB[owner][TB[owner].length - 2].balance;
             }
@@ -376,14 +377,11 @@ contract DABC10 is DABC10Interface {
         if(lj != 0){
             jc = get_valid(_inviter, current) / 100;
             sum += jc * 2 * (ll - lv) / 10;
-            if (invitees[_inviter].length == 0){
-                return sum;
-            } else {
-                for (uint i = 0; i < invitees[_inviter].length; i++){
-                    sum += get_jc(invitees[_inviter][i], current, ll);
-                }
-                return sum;
+            if (invitees[_inviter].length == 0) return sum;
+            for (uint i = 0; i < invitees[_inviter].length; i++){
+                sum += get_jc(invitees[_inviter][i], current, ll);
             }
+            return sum;
         } else {
             return 0;
         }
@@ -394,9 +392,11 @@ contract DABC10 is DABC10Interface {
     * 获取级差额度
     */
     function getJC(address _inviter) public returns (uint256, uint256) {
+        if(_inviter == address(0)) return (0, 0);
         uint jc = 0;
         uint current = block.timestamp;
         (uint256 lj, uint lv) = GetAchievement(_inviter);
+        if(lv == 0) return (0, 0);
         if(invitees[_inviter].length > 0){
             for(uint i = 0; i < invitees[_inviter].length; i++){
                 jc += get_jc(invitees[_inviter][i], current, lv);
