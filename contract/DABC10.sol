@@ -324,13 +324,6 @@ contract DABC10 is DABC10Interface {
         require(_inviter != address(0));
         uint256 sum = 0;
         uint current = block.timestamp;
-        // if(TB[_inviter].length != 0){
-        //     for(uint i = 0; i < TB[_inviter].length; i++){
-        //         if (current - TB[_inviter][i].time < winTime && TB[_inviter][i].valid){
-        //             sum += TB[_inviter][i].balance;
-        //         }
-        //     }
-        // }
         sum = get_valid(_inviter, current);
         if (invitees[_inviter].length == 0){
             return (sum, level(sum));
@@ -391,11 +384,11 @@ contract DABC10 is DABC10Interface {
     /*
     * 获取级差额度
     */
-    function getJC(address _inviter) public returns (uint256, uint256) {
+    function getJC(address _inviter) public returns (uint256 lj, uint256 jc) {
         if(_inviter == address(0)) return (0, 0);
-        uint jc = 0;
         uint current = block.timestamp;
-        (uint256 lj, uint lv) = GetAchievement(_inviter);
+        uint lv = 0;
+        (lj, lv) = GetAchievement(_inviter);
         if(lv == 0) return (0, 0);
         if(invitees[_inviter].length > 0){
             for(uint i = 0; i < invitees[_inviter].length; i++){
