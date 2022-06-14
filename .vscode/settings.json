@@ -1,3 +1,4 @@
 {
-    "solidity.compileUsingLocalVersion": "/Users/huangjg/Desktop/DABC/soljson-v0.8.7+commit.e28d00a7.js"
+    "solidity.compileUsingLocalVersion": "c:\\Users\\Administrator\\Desktop\\DABC\\soljson-v0.8.7+commit.e28d00a7.js",
+    "solidity.compileUsingRemoteVersion": "v0.8.7+commit.e28d00a7"
 }

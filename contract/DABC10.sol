@@ -7,17 +7,18 @@ import "./DABC10Interface.sol";
 contract DABC10 is DABC10Interface {
 
     uint256 constant private MAX_UINT256 = 2**256 - 1;
-    uint constant public winTime = 1 * 60;         //获取本金+利息时间（单位：秒）
+    uint constant public winTime = 3 * 60;         //获取本金+利息时间（单位：秒）
     uint256 constant public eachMinedMinCount = 1e17; //单轮最小
     uint256 constant public eachMinedMaxCount = 10e18; //单轮最大
     uint constant public rate = 6;             //利率，例：6，表示106%
     uint constant public ZTRate = 2;           //直推利息，3%
     // uint256 public Per = 100 * 10 ** 18;  //消耗比率：1 BNB : 100 DABC
     uint constant public SpanMin = 1 * 60; //第二轮投入开始时间(单位：秒)
-    uint constant public SpanMax = 2 * 60; //第二轮投入结束时间(单位：秒)
+    uint constant public SpanMax = 3 * 60; //第二轮投入结束时间(单位：秒)
     uint256 constant public Multiple = 1e17;    //投入倍数
     uint constant public InvalidTimesLimit = 2;    //无效单次数限制
     uint256 constant public OOD = 15 * 60;   //15天没有再质押则拉黑名单（测试：15分钟）
+    uint constant jc_span = 24 * 60 * 60;      //级差奖励领取时间间隔
 
     string public constant name = 'DABC';    
     string public constant symbol = 'DABC';               
@@ -27,7 +28,7 @@ contract DABC10 is DABC10Interface {
 
     address admin;
     address constant matemask_account1 = 0x821b121D544cAb0a4F4d0ED2F1c2B14fAb4f969F;
-    address internal backen = 0x7AAB4Ff86700A2D701d4858828094202a9D48102;
+    // address internal backen = 0x7AAB4Ff86700A2D701d4858828094202a9D48102;
 
     mapping(address => uint256) public reward;
     mapping(address => address[]) public invitees;
@@ -37,6 +38,7 @@ contract DABC10 is DABC10Interface {
     mapping(address => tb[]) public TB;
     mapping(address => uint256) public balances;
     mapping(address => mapping(address => uint256)) public allowed;
+    mapping(address => uint) jc_time;
     // mapping(address => jicha[]) public JC;
 
     // struct jicha {
@@ -70,6 +72,7 @@ contract DABC10 is DABC10Interface {
         bool valid;
         uint256 balance;
         bool isexist;
+        uint256 reward;
     }
     
     
@@ -205,6 +208,7 @@ contract DABC10 is DABC10Interface {
             if(span <= SpanMax) {
                 require(msg.value >= TB[msg.sender][TB[msg.sender].length - 1].balance);
                 TB[msg.sender][TB[msg.sender].length - 1].valid = true;
+                TB[msg.sender][TB[msg.sender].length - 1].reward = TB[msg.sender][TB[msg.sender].length - 1].balance * rate / 100;
                 reward[msg.sender] += TB[msg.sender][TB[msg.sender].length - 1].balance * rate / 100;
                 if(getInvitor[msg.sender] != address(0)){
                     uint256 inviter_valid = get_valid(getInvitor[msg.sender], currtime);
@@ -227,7 +231,7 @@ contract DABC10 is DABC10Interface {
             invitees[_inviter].push(msg.sender);
         }
         //进行交易
-        TB[msg.sender].push(tb(currtime, false, msg.value, true));
+        TB[msg.sender].push(tb(currtime, false, msg.value, true, 0));
         back_flow(cost);
         minters[msg.sender].totalBalance += msg.value;
         minters[msg.sender].tblength = TB[msg.sender].length;
@@ -343,7 +347,7 @@ contract DABC10 is DABC10Interface {
     /*
     * 获取级差额度
     */
-    function getJC(address _inviter) public returns (uint256 lj, uint256 jc) {
+    function GetJC(address _inviter) public returns (uint256 lj, uint256 jc) {
         if(_inviter == address(0)) return (0, 0);
         uint current = block.timestamp;
         uint lv = 0;
@@ -357,8 +361,19 @@ contract DABC10 is DABC10Interface {
         return (lj, jc);
     }
 
+    // 待完善(一天领取一次？7天领取一次？)
     function GetJCBalance() public payable {
-        
+        uint current = block.timestamp;
+        require(current - jc_time[msg.sender] >= jc_span);
+        require(minters[msg.sender].times != 0);
+        require(msg.sender != address(0));
+        (uint256 yj, uint256 jcBalance) = GetJC(msg.sender);
+        require(yj != 0);
+        require(jcBalance > 0);
+        require(address(this).balance >= jcBalance);
+        payable(msg.sender).transfer(jcBalance);
+        minters[msg.sender].totalRevenue += jcBalance;
+        jc_time[msg.sender] = current;
     }
 
 
