@@ -37,29 +37,29 @@ contract DABC10 is DABC10Interface {
     mapping(address => tb[]) public TB;
     mapping(address => uint256) public balances;
     mapping(address => mapping(address => uint256)) public allowed;
-    mapping(address => jicha[]) public JC;
+    // mapping(address => jicha[]) public JC;
 
-    struct jicha {
-        address fromwho;
-        uint time;
-        uint256 jcBalance;
-    }
+    // struct jicha {
+    //     address fromwho;
+    //     uint time;
+    //     uint256 jcBalance;
+    // }
     
     struct zhitui {
-        address fromwho;
-        bool enable;
-        bool burning;
-        uint time;
-        uint256 ztBalance;
+        address fromwho;    //建立此直推回报单的地址
+        bool enable;        //是否可领取（ture：可领取；false：已领取）
+        bool burning;       //是否被烧伤
+        uint time;          //直推回报单创建的时间
+        uint256 ztBalance;  //直推回报额度
     }
 
     struct minter {
         uint lastPledgeTime;
         uint times;
         uint invalidTimes;
-        uint tblength;
+        uint tblength;     
         uint jclength;
-        uint ztlength;
+        uint ztlength;      //直推单列表长度
         uint256 totalBalance;
         uint256 totalRevenue;
     }
@@ -184,48 +184,6 @@ contract DABC10 is DABC10Interface {
         return Per;
     }
 
-    // function Pledge() public payable {
-    //     require(msg.sender != address(0));
-    //     require(msg.sender != admin);
-    //     require(msg.value >= eachMinedMinCount && msg.value <= eachMinedMaxCount);                
-    //     require(msg.value % Multiple == 0);
-        
-    //     uint256 Per = state_per();
-    //     uint256 cost = msg.value * Per / 10 ** 18;
-    //     require(balances[msg.sender] >= cost);
-    //     uint currtime = block.timestamp;
-    //     if(minters[msg.sender].times != 0){
-    //         require(currtime - minters[msg.sender].lastPledgeTime <= OOD);
-    //     }
-    //     if (TB[msg.sender].length > 0) {
-    //         uint lasttime = TB[msg.sender][TB[msg.sender].length - 1].time;
-    //         uint span = currtime - lasttime;
-    //         require(span >= SpanMin);
-    //         if(span <= SpanMax) {
-    //             //pledge go on
-    //             require(msg.value >= TB[msg.sender][TB[msg.sender].length - 1].balance);
-    //             TB[msg.sender][TB[msg.sender].length - 1].valid = true;
-    //             reward[msg.sender] += TB[msg.sender][TB[msg.sender].length - 1].balance * rate / 100;
-    //             if(getInvitor[msg.sender] != address(0)){
-    //                 //inviter exist
-    //                 ZT[getInvitor[msg.sender]].push(zhitui(msg.sender, true, TB[msg.sender][TB[msg.sender].length - 1].time, TB[msg.sender][TB[msg.sender].length - 1].balance * ZTRate / 100));
-    //                 minters[getInvitor[msg.sender]].ztlength = ZT[getInvitor[msg.sender]].length;
-    //             }
-    //         } else {
-    //             //pledge break
-    //             minters[msg.sender].invalidTimes++;
-    //         }  
-    //     }
-    //     require(minters[msg.sender].invalidTimes < InvalidTimesLimit);
-    //     //进行交易
-    //     TB[msg.sender].push(tb(currtime, false, msg.value, true));
-    //     back_flow(cost);
-    //     minters[msg.sender].totalBalance += msg.value;
-    //     minters[msg.sender].tblength = TB[msg.sender].length;
-    //     minters[msg.sender].times++;
-    //     minters[msg.sender].lastPledgeTime = currtime;
-    // }
-
 
     function Pledge(address _inviter) public payable {
         require(msg.sender != address(0));
@@ -335,23 +293,24 @@ contract DABC10 is DABC10Interface {
     }
 
     function level(uint256 achieve) internal pure returns (uint) {
-        if(achieve >= 100e8 && achieve < 500e8){
+        if(achieve < 500e18){
             return 0;
-        } else if(achieve >= 500e8 && achieve < 1000e8) {
+        } else if(achieve >= 500e18 && achieve < 1000e18) {
             return 1;
-        } else if(achieve >= 1000e8 && achieve < 2000e8){
+        } else if(achieve >= 1000e18 && achieve < 2000e18){
             return 2;
-        } else if(achieve >= 2000e8 && achieve < 5000e8){
+        } else if(achieve >= 2000e18 && achieve < 5000e18){
             return 3;
-        } else if(achieve >= 5000e8 && achieve < 8000e8){
+        } else if(achieve >= 5000e18 && achieve < 8000e18){
             return 4;
-        } else {
+        } else if(achieve >= 8000e18) {
             return 5;
         }
+        return 0;
     }
 
     //get one's validated order
-    function get_valid(address owner, uint current) internal view returns (uint256) {
+    function get_valid(address owner, uint current) public view returns (uint256) {
         uint256 sum = 0;
         if(TB[owner].length > 1){
             if (current - TB[owner][TB[owner].length - 1].time <= SpanMax && 
@@ -369,7 +328,7 @@ contract DABC10 is DABC10Interface {
         (uint256 lj, uint lv) = GetAchievement(_inviter);
         if(lj != 0){
             jc = get_valid(_inviter, current) / 100;
-            sum += jc * 2 * (ll - lv) / 10;
+            sum += jc * 2 * (ll - lv) / 10;    //等级战利比关系：战利比 = 等级 * 2 / 10
             if (invitees[_inviter].length == 0) return sum;
             for (uint i = 0; i < invitees[_inviter].length; i++){
                 sum += get_jc(invitees[_inviter][i], current, ll);
@@ -396,6 +355,10 @@ contract DABC10 is DABC10Interface {
             }
         }
         return (lj, jc);
+    }
+
+    function GetJCBalance() public payable {
+        
     }
 
 
