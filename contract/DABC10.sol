@@ -139,6 +139,9 @@ contract DABC10 is DABC10Interface {
     //     payable(_to).transfer(_amount);
     //     return true;
     // }
+    function get_timestamp() public view returns (uint) {
+        return block.timestamp;
+    }
 
     function poolBalance() public view returns (uint256) {
         return address(this).balance;
