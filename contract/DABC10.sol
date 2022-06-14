@@ -62,8 +62,11 @@ contract DABC10 is DABC10Interface {
         uint tblength;     
         uint jclength;
         uint ztlength;      //直推单列表长度
-        uint256 totalBalance;
-        uint256 totalRevenue;
+        uint256 totalBalance;  //总
+        uint256 totalRevenue;  //总收益
+        uint256 PDRevenue;     //质押总收益
+        uint256 ZTRevenue;     //直推总收益
+        uint256 JCRevenue;     //级差总收益
     }
 
 
@@ -266,6 +269,8 @@ contract DABC10 is DABC10Interface {
         require(payment > 0);
         require(payment <= address(this).balance);
         payable(msg.sender).transfer(payment);
+        minters[msg.sender].totalRevenue += payment;
+        minters[msg.sender].ZTRevenue += payment;
     }
 
     function GetDABC(uint256 _value) public {
@@ -376,6 +381,7 @@ contract DABC10 is DABC10Interface {
         require(address(this).balance >= jcBalance);
         payable(msg.sender).transfer(jcBalance);
         minters[msg.sender].totalRevenue += jcBalance;
+        minters[msg.sender].JCRevenue += jcBalance;
         jc_time[msg.sender] = current;
     }
 
@@ -394,7 +400,7 @@ contract DABC10 is DABC10Interface {
         } 
         require(payment <= address(this).balance && payment > 0);
         payable(msg.sender).transfer(payment);
-        minters[msg.sender].totalRevenue += payment;
+        // minters[msg.sender].totalRevenue += payment;
     }
 
     function GetReward() public payable {
@@ -403,6 +409,7 @@ contract DABC10 is DABC10Interface {
         require(address(this).balance >= reward[msg.sender]);
         payable(msg.sender).transfer(reward[msg.sender]);
         minters[msg.sender].totalRevenue += reward[msg.sender];
+        minters[msg.sender].PDRevenue += reward[msg.sender];
         reward[msg.sender] = 0;
     }
 
