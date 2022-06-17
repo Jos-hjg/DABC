@@ -1,30 +1,29 @@
 // SPDX-License-Identifier: Apache-2.0
 
-pragma solidity >=0.7.0 <0.9.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 import "./DABC10Interface.sol";
 
 contract DABC10 is DABC10Interface {
 
     uint256 constant private MAX_UINT256 = 2**256 - 1;
-    uint constant public winTime = 3 * 60;         //获取本金+利息时间（单位：秒）
+    uint constant public winTime = 3 * 60;         //质押时长（单位：秒）
     uint256 constant public eachMinedMinCount = 1e17; //单轮最小
     uint256 constant public eachMinedMaxCount = 10e18; //单轮最大
-    uint constant public rate = 6;             //利率，例：6，表示106%
+    uint constant public rate = 6;             //质押利息，例：6，表示6%
     uint constant public ZTRate = 2;           //直推利息，3%
-    // uint256 public Per = 100 * 10 ** 18;  //消耗比率：1 BNB : 100 DABC
-    uint constant public SpanMin = 1 * 60; //第二轮投入开始时间(单位：秒)
-    uint constant public SpanMax = 3 * 60; //第二轮投入结束时间(单位：秒)
-    uint256 constant public Multiple = 1e17;    //投入倍数
-    uint constant public InvalidTimesLimit = 2;    //无效单次数限制
-    uint256 constant public OOD = 15 * 60;   //15天没有再质押则拉黑名单（测试：15分钟）
+    uint constant public SpanMin = 1 * 60; //第二轮质押开始距第一轮质押的时间间隔(单位：秒)
+    uint constant public SpanMax = 3 * 60; //第二轮质押结束距第一轮质押的时间间隔(单位：秒)
+    uint256 constant public Multiple = 1e17;    //质押倍数
+    uint constant public InvalidTimesLimit = 100;    //无效单次数限制
+    uint256 constant public OOD = 15 * 24 * 60 * 60;   //15天没有再质押则拉黑名单（测试：15分钟）
     uint constant jc_span = 24 * 60 * 60;      //级差奖励领取时间间隔
 
-    string public constant name = 'DABC';    
-    string public constant symbol = 'DABC';               
-    uint8 public constant decimals = 18;                
+    string public constant name = 'DABC';
+    string public constant symbol = 'DABC';      
+    uint8 public constant decimals = 18;
     uint256 public totalSupply;
-    uint256 public total;   
+    uint256 public total;
 
     address admin;
     address constant matemask_account1 = 0x821b121D544cAb0a4F4d0ED2F1c2B14fAb4f969F;
@@ -38,7 +37,7 @@ contract DABC10 is DABC10Interface {
     mapping(address => tb[]) public TB;
     mapping(address => uint256) public balances;
     mapping(address => mapping(address => uint256)) public allowed;
-    mapping(address => uint) jc_time;
+    mapping(address => uint) jc_time;       //级差领取时间记录
     // mapping(address => jicha[]) public JC;
 
     // struct jicha {
@@ -58,11 +57,11 @@ contract DABC10 is DABC10Interface {
     struct minter {
         uint lastPledgeTime;
         uint times;
-        uint invalidTimes;
+        uint invalidTimes;    //无效单次数
         uint tblength;     
         uint jclength;
         uint ztlength;      //直推单列表长度
-        uint256 totalBalance;  //总
+        uint256 totalBalance;  //总支出交易
         uint256 totalRevenue;  //总收益
         uint256 PDRevenue;     //质押总收益
         uint256 ZTRevenue;     //直推总收益
@@ -71,11 +70,12 @@ contract DABC10 is DABC10Interface {
 
 
     struct tb {
-        uint time;
-        bool valid;
-        uint256 balance;
-        bool isexist;
-        uint256 reward;
+        uint time;          //时间戳
+        bool valid;         //是否有效
+        uint256 cost;       //质押消耗
+        uint256 balance;    //质押额度
+        bool isexist;       //true:本金存在;false:本金已领取
+        uint256 reward;     //质押奖励
     }
     
     
@@ -142,6 +142,8 @@ contract DABC10 is DABC10Interface {
     //     payable(_to).transfer(_amount);
     //     return true;
     // }
+
+
     function get_timestamp() public view returns (uint) {
         return block.timestamp;
     }
@@ -156,6 +158,16 @@ contract DABC10 is DABC10Interface {
 
     function getInvitees(address _inviter) public view returns (address[] memory) {
         return invitees[_inviter];
+    }
+
+    //get invilid times,
+    function get_invalidtimes(address _sender) public view returns (uint) {
+        uint t = 0;
+        if(TB[_sender].length == 0) return t;
+        for(uint i = 0; i < TB[_sender].length; i++){
+            if(!TB[_sender][i].valid) t++;
+        }
+        return t;
     }
 
     // function safe_rm_tb(uint rm_at) internal {
@@ -212,6 +224,7 @@ contract DABC10 is DABC10Interface {
             uint span = currtime - lasttime;
             require(span >= SpanMin);
             if(span <= SpanMax) {
+                //pledge continue
                 require(msg.value >= TB[msg.sender][TB[msg.sender].length - 1].balance);
                 TB[msg.sender][TB[msg.sender].length - 1].valid = true;
                 TB[msg.sender][TB[msg.sender].length - 1].reward = TB[msg.sender][TB[msg.sender].length - 1].balance * rate / 100;
@@ -227,6 +240,7 @@ contract DABC10 is DABC10Interface {
                     minters[getInvitor[msg.sender]].ztlength = ZT[getInvitor[msg.sender]].length;
                 }
             } else {
+                //break
                 minters[msg.sender].invalidTimes++;
             }  
         }
@@ -237,7 +251,7 @@ contract DABC10 is DABC10Interface {
             invitees[_inviter].push(msg.sender);
         }
         //进行交易
-        TB[msg.sender].push(tb(currtime, false, msg.value, true, 0));
+        TB[msg.sender].push(tb(currtime, false, cost, msg.value, true, 0));
         back_flow(cost);
         minters[msg.sender].totalBalance += msg.value;
         minters[msg.sender].tblength = TB[msg.sender].length;
