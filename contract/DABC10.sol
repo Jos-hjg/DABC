@@ -24,6 +24,7 @@ contract DABC10 is DABC10Interface {
     uint8 public constant decimals = 18;
     uint256 public totalSupply;
     uint256 public total;
+    uint256 public pledged;
 
     address admin;
     address constant matemask_account1 = 0x821b121D544cAb0a4F4d0ED2F1c2B14fAb4f969F;
@@ -241,10 +242,11 @@ contract DABC10 is DABC10Interface {
                 }
             } else {
                 //break
-                minters[msg.sender].invalidTimes++;
+                // minters[msg.sender].invalidTimes++;
             }  
         }
-        require(minters[msg.sender].invalidTimes < InvalidTimesLimit);
+        // require(minters[msg.sender].invalidTimes < InvalidTimesLimit);
+        require(get_invalidtimes(msg.sender) <= InvalidTimesLimit);    //also
         //建立关系
         if(getInvitor[msg.sender] == address(0) && invitees[msg.sender].length == 0 && _inviter != address(0)){
             getInvitor[msg.sender] = _inviter;
@@ -252,6 +254,8 @@ contract DABC10 is DABC10Interface {
         }
         //进行交易
         TB[msg.sender].push(tb(currtime, false, cost, msg.value, true, 0));
+        pledged += msg.value;
+        require(pledged >= address(this).balance);
         back_flow(cost);
         minters[msg.sender].totalBalance += msg.value;
         minters[msg.sender].tblength = TB[msg.sender].length;
@@ -412,6 +416,8 @@ contract DABC10 is DABC10Interface {
                 TB[msg.sender][i].isexist = false;
             }
         } 
+        pledged -= payment;
+        require(pledged >= address(this).balance);
         require(payment <= address(this).balance && payment > 0);
         payable(msg.sender).transfer(payment);
         // minters[msg.sender].totalRevenue += payment;
