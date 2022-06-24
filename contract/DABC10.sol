@@ -4,8 +4,7 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import "./DABC10Interface.sol";
 import "./AggregatorInterface.sol";
-// import "./.deps/github/smartcontractkit/chainlink/contracts/src/v0.8/interfaces/AggregatorInterface.sol";
-// import "https://github.com/smartcontractkit/chainlink/contracts/src/v0.8/interfaces/AggregatorInterface.sol";
+
 
 contract DABC10 is DABC10Interface {
 
@@ -56,7 +55,6 @@ contract DABC10 is DABC10Interface {
         uint times;
         uint invalidTimes;    //无效单次数
         uint tblength;     
-        uint jclength;
         uint ztlength;      //直推单列表长度
         uint256 totalBalance;  //总支出交易
         uint256 totalRevenue;  //总收益
@@ -142,8 +140,10 @@ contract DABC10 is DABC10Interface {
     //     return true;
     // }
 
-    function getLatestPrice() public view returns (int256) {
-        return priceFeed.latestAnswer();
+    function getLatestPrice() public pure returns (int256) {
+        // return 22268791769 for test
+        return 22268791769;
+        // return priceFeed.latestAnswer();
     }
 
     function getLatestPriceTimestamp() public view returns (uint256) {
